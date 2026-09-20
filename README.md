@@ -12,7 +12,7 @@ finger frame acts as a window into the animated version.
 | App | Generation | Latency |
 |---|---|---|
 | [finger-frame-effect](https://sophiamyang.github.io/finger-frame-effect/) ([repo](https://github.com/sophiamyang/finger-frame-effect)) — live camera, local effects | Canvas 2D (Van Gogh, toon, glitch, …) | none |
-| **this app** — recorded video, AI restyle | Gemini Omni Flash (offline video edit) | minutes |
+| **this app** — recorded video, AI restyle | FLUX Video Edit through OpenRouter (offline video edit) | minutes |
 | [finger-frame-effect-lucy](https://sophiamyang.github.io/finger-frame-effect-lucy/) ([repo](https://github.com/sophiamyang/finger-frame-effect-lucy)) — live camera, live AI | Decart Lucy 2.5 (realtime video-to-video) | ~real time |
 
 ![Example: AI-animated world inside the finger frame](examples/final.gif)
@@ -23,7 +23,7 @@ style ([full-quality mp4](examples/final.mp4)).*
 ## How it works
 
 1. **Restyle** — the uploaded video is sent to
-   [Gemini Omni Flash video editing](https://ai.google.dev/gemini-api/docs/omni)
+   [FLUX Video Edit through OpenRouter](https://openrouter.ai/black-forest-labs/flux-video-edit)
    with your chosen style (3D animated movie, anime, claymation,
    watercolor, or a custom prompt). This is a true video model: the whole
    clip is regenerated, so the animated version moves exactly like you.
@@ -44,21 +44,25 @@ style ([full-quality mp4](examples/final.mp4)).*
 
 ## Bring your own key
 
-The AI step uses your own [Gemini API key](https://aistudio.google.com/apikey),
+The AI step uses your own [OpenRouter API key](https://openrouter.ai/keys),
 entered in the app. It stays in your browser (localStorage only if you check
-"remember") and is sent only to Google's API. Generation is billed per
-video and takes a few minutes. Keep clips under ~15MB (a few seconds of
-720p — any common format: mp4, mov, webm); larger files exceed the inline
-upload limit. No key? The **placeholder style** button runs the full
+"remember") and is sent only to OpenRouter. Generation uses FLUX Video Edit
+(Black Forest Labs), is billed per output second (3¢/s), and takes a few
+minutes. Use a 4–15 second
+clip in any common format (mp4, mov, webm). Clips over 15MB are downscaled and
+compressed to 480p in the browser before upload. OpenRouter requires an HTTPS
+video URL, so the processed input is temporarily uploaded to `uguu.se`
+and that URL is sent to OpenRouter. No key? The **placeholder style** button runs the full
 track-composite-export pipeline with a hue-shifted stand-in so you can try
 everything for free.
 
 ## Run locally
 
-Any static server works:
+Run the included local server. It proxies temporary video uploads and
+OpenRouter requests so browser cross-origin restrictions do not interrupt jobs:
 
 ```bash
-python3 -m http.server 8124
+python server.py
 ```
 
 Then open http://localhost:8124. A `?src=<file>` query param loads a video
@@ -73,7 +77,7 @@ frame-accurate H.264 output:
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-export GEMINI_API_KEY=...
+export OPENROUTER_API_KEY=...
 .venv/bin/python stylize.py input.mp4 -o stylized.mp4      # AI restyle
 .venv/bin/python composite.py input.mp4 stylized.mp4 -o final.mp4
 ```

@@ -1,23 +1,34 @@
 #!/usr/bin/env python3
-"""Restyle a video with Gemini Omni Flash (video-to-video editing).
+"""Restyle a video through OpenRouter using FLUX Video Edit.
 
 The whole clip is regenerated per the prompt while motion and framing are
 preserved, so the result stays aligned with the original footage and
-composite.py can use the finger frame as a window over it.
+composite.py can use the finger frame as a window over it. Output duration
+and size follow the source clip, so no duration/size parameters are sent.
+Seedance 2.0 was the previous model but its input moderation rejects any
+video containing a real person, which breaks this app's core use case.
 
 Usage:
-    export GEMINI_API_KEY=...   # https://aistudio.google.com/apikey
+    export OPENROUTER_API_KEY=...   # https://openrouter.ai/keys
     python stylize.py finger-effect-raw.mp4 -o stylized.mp4
 
-Docs: https://ai.google.dev/gemini-api/docs/omni
+Docs: https://openrouter.ai/docs/guides/overview/multimodal/video-generation
 """
 
 import argparse
+import mimetypes
 import os
 import sys
 import time
 
-MODEL = "gemini-omni-flash-preview"
+import requests
+import cv2
+
+API_BASE = "https://openrouter.ai/api/v1"
+MODEL = "black-forest-labs/flux-video-edit"
+# BFL content filter: 0 strictest, 6 most permissive (default 2). Raised so
+# ordinary footage of yourself passes. Forwarded only when routed to BFL.
+SAFETY_TOLERANCE = 4
 DEFAULT_PROMPT = (
     "Transform the person into a 3D animated movie character (stylized CGI "
     "animation look, expressive big eyes, soft lighting). This is a strict "
@@ -37,6 +48,16 @@ DEFAULT_PROMPT = (
 )
 
 
+def check_duration(path):
+    cap = cv2.VideoCapture(path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    cap.release()
+    duration = frames / fps if fps else 0
+    if not 4 <= duration <= 15:
+        sys.exit(f"Use a 4–15 second clip (got {duration:.1f}s)")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("video", nargs="?", default="finger-effect-raw.mp4")
@@ -44,71 +65,70 @@ def main():
     ap.add_argument("-p", "--prompt", default=DEFAULT_PROMPT)
     args = ap.parse_args()
 
-    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
-        sys.exit("Set GEMINI_API_KEY first — https://aistudio.google.com/apikey")
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        sys.exit("Set OPENROUTER_API_KEY first — https://openrouter.ai/keys")
     if not os.path.exists(args.video):
         sys.exit(f"Input video not found: {args.video}")
 
-    from google import genai  # imported late so --help works without the dep
+    mime = mimetypes.guess_type(args.video)[0] or "video/mp4"
+    check_duration(args.video)
+    print("Uploading a temporary HTTPS copy …")
+    with open(args.video, "rb") as source:
+        upload = requests.post(
+            "https://uguu.se/upload.php",
+            files={"files[]": (os.path.basename(args.video), source, mime)},
+            timeout=120,
+        )
+    upload.raise_for_status()
+    video_url = upload.json()["files"][0]["url"]
 
-    client = genai.Client()
-
-    print(f"Uploading {args.video} …")
-    video_file = client.files.upload(file=args.video)
-    while getattr(video_file, "state", "") and "PROCESS" in str(video_file.state):
-        time.sleep(3)
-        video_file = client.files.get(name=video_file.name)
-    print(f"Uploaded: {video_file.uri}")
-
+    headers = {"Authorization": f"Bearer {key}"}
     print(f"Generating with {MODEL} (typically a few minutes) …")
-    interaction = client.interactions.create(
-        model=MODEL,
-        input=[
-            {"type": "document", "uri": video_file.uri},
-            {"type": "text", "text": args.prompt},
-        ],
+    response = requests.post(
+        f"{API_BASE}/videos",
+        headers=headers,
+        json={
+            "model": MODEL,
+            "prompt": args.prompt,
+            "input_references": [
+                {"type": "video_url", "video_url": {"url": video_url}}
+            ],
+            "provider": {
+                "options": {
+                    "black-forest-labs": {"safety_tolerance": SAFETY_TOLERANCE}
+                }
+            },
+        },
+        timeout=120,
     )
+    response.raise_for_status()
+    job = response.json()
 
-    # Poll if the interaction reports as still running.
+    poll_url = job.get("polling_url") or f"/api/v1/videos/{job['id']}"
+    if poll_url.startswith("/"):
+        poll_url = "https://openrouter.ai" + poll_url
     waited = 0
-    while (
-        str(getattr(interaction, "status", "")).lower()
-        in ("pending", "in_progress", "processing", "running", "queued")
-        and waited < 900
-    ):
+    while job.get("status", "").lower() in (
+        "pending", "in_progress", "processing", "running", "queued"
+    ) and waited < 900:
         time.sleep(5)
         waited += 5
-        interaction = client.interactions.get(id=interaction.id)
-        print(f"  … {waited}s ({interaction.status})")
+        poll = requests.get(poll_url, headers=headers, timeout=30)
+        poll.raise_for_status()
+        job = poll.json()
+        print(f"  … {waited}s ({job.get('status', 'working')})")
 
-    video_out = getattr(interaction, "output_video", None)
-    if video_out is None:
-        sys.exit(f"No video in response — raw interaction:\n{interaction}")
+    if job.get("status") != "completed":
+        sys.exit(f"Generation failed: {job.get('error') or job.get('status')}")
 
-    data = getattr(video_out, "data", None)
-    if data:
-        import base64
-
-        with open(args.output, "wb") as f:
-            f.write(base64.b64decode(data) if isinstance(data, str) else data)
-    else:
-        uri = getattr(video_out, "uri", None)
-        if not uri:
-            sys.exit(f"No data or uri on output video:\n{video_out}")
-        name = "files/" + uri.split("/files/")[1].split("?")[0] if "/files/" in uri else uri
-        for _ in range(120):
-            f = client.files.get(name=name)
-            if "ACTIVE" in str(getattr(f, "state", "")):
-                break
-            time.sleep(5)
-        print("Downloading result …")
-        client.files.download(file=f, path=args.output) if hasattr(
-            client.files, "download"
-        ) else None
-        if not os.path.exists(args.output):
-            blob = client.files.download(file=f)
-            with open(args.output, "wb") as out:
-                out.write(blob)
+    urls = job.get("unsigned_urls") or []
+    content_url = urls[0] if urls else f"{API_BASE}/videos/{job['id']}/content"
+    print("Downloading result …")
+    result = requests.get(content_url, headers=headers, timeout=120)
+    result.raise_for_status()
+    with open(args.output, "wb") as out:
+        out.write(result.content)
 
     print(f"Done: {args.output}")
 

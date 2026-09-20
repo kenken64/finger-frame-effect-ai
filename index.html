@@ -261,18 +261,18 @@
     <div class="step"><span class="n">1</span> Key &amp; style
       <span class="opt">— key needed only for the AI restyle</span></div>
     <p>
-      Restyling runs on <strong>Gemini Omni Flash</strong>
-      (<a href="https://ai.google.dev/gemini-api/docs/omni" target="_blank" rel="noopener">video-to-video editing</a>)
-      with your own key from
-      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>.
-      It stays in your browser and is sent only to Google's API. No key? Try
-      everything with the placeholder style first.
+      Restyling runs <strong>through OpenRouter</strong> using
+      <a href="https://openrouter.ai/black-forest-labs/flux-video-edit" target="_blank" rel="noopener">FLUX Video Edit</a>
+      with your own <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">OpenRouter key</a>.
+      Your key stays in your browser. Because OpenRouter requires an HTTPS video
+      URL, the clip is uploaded temporarily to uguu.se before OpenRouter
+      processes it. No key? Try everything with the placeholder style first.
     </p>
     <div class="row2">
       <div>
-        <div class="field-label">Gemini API key</div>
-        <input id="gem-key" type="password" placeholder="AIza…" autocomplete="off" />
-        <label class="remember"><input type="checkbox" id="gem-remember" /> Remember on this device</label>
+        <div class="field-label">OpenRouter API key</div>
+        <input id="openrouter-key" type="password" placeholder="sk-or-v1-…" autocomplete="off" />
+        <label class="remember"><input type="checkbox" id="openrouter-remember" /> Remember on this device</label>
       </div>
       <div>
         <div class="field-label">Style</div>
@@ -295,7 +295,7 @@
     <input id="file" type="file" accept="video/*" />
     <div class="film">🎬</div>
     <div class="big"><span style="opacity:.55">2 ·</span> Drop a video here, or click to choose</div>
-    <div class="small">A few seconds of 720p footage with the two-hand gesture works best (&lt;15MB).</div>
+    <div class="small">Use a 4–15 second clip with the two-hand gesture. Files over 15MB are compressed to 480p automatically.</div>
   </label>
 
   <div id="stage">
@@ -312,7 +312,7 @@
   </div>
 
   <footer>
-    Gemini Omni Flash · MediaPipe hand tracking · runs entirely in your browser<br />
+    OpenRouter + FLUX Video Edit · MediaPipe hand tracking · no app server required<br />
     <a href="https://sophiamyang.github.io/finger-frame-effect/" target="_blank" rel="noopener">live-camera sibling app</a>
     ·
     <a href="https://github.com/sophiamyang/finger-frame-effect-ai" target="_blank" rel="noopener">source on GitHub</a>
