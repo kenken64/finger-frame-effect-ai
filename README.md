@@ -68,6 +68,18 @@ python server.py
 Then open http://localhost:8124. A `?src=<file>` query param loads a video
 from the server directory (dev convenience).
 
+## Deploy to Railway
+
+Railway detects the included `Dockerfile`. Create a service from this
+repository and deploy it; no application environment variables are required.
+Railway supplies `PORT`, while the container sets `HOST=0.0.0.0`. For a local
+container test, run:
+
+```bash
+docker build -t finger-frame-ai .
+docker run --rm -p 8124:8080 finger-frame-ai
+```
+
 ## CLI alternative (Python)
 
 The same pipeline as offline scripts — useful for batch work or

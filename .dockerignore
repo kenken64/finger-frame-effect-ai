@@ -1,0 +1,14 @@
+.git/
+.venv/
+__pycache__/
+.DS_Store
+*.log
+.env
+
+# Do not send local videos or generated outputs to the build context.
+*.mov
+*.mp4
+*.webm
+*.png
+!examples/final.mp4
+!examples/final.gif

@@ -91,6 +91,7 @@ class AppHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "8124"))
-    print(f"Serving Finger Frame AI at http://127.0.0.1:{port}/")
-    ThreadingHTTPServer(("127.0.0.1", port), AppHandler).serve_forever()
+    print(f"Serving Finger Frame AI at http://{host}:{port}/")
+    ThreadingHTTPServer((host, port), AppHandler).serve_forever()
