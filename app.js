@@ -95,8 +95,14 @@ styleSelect.addEventListener("change", () => {
 styleCustom.addEventListener("change", () =>
   localStorage.setItem("ai-style-custom", styleCustom.value)
 );
+// Header values are Latin-1 only, so a key pasted with invisible Unicode
+// (zero-width spaces, BOM, non-breaking spaces) makes fetch() throw.
+function cleanKey(raw) {
+  return raw.replace(/[\s\u200b-\u200d\ufeff]/g, "");
+}
 function saveKey() {
-  const key = keyInput.value.trim();
+  const key = cleanKey(keyInput.value);
+  keyInput.value = key;
   localStorage.removeItem("openrouter-key");
   sessionStorage.removeItem("openrouter-key");
   if (key) (keyRemember.checked ? localStorage : sessionStorage).setItem("openrouter-key", key);
@@ -294,7 +300,9 @@ async function uploadTemporaryVideo(file) {
     method: "POST",
     headers: {
       "Content-Type": file.type || "video/mp4",
-      "X-Filename": file.name,
+      // Percent-encoded because header values must be Latin-1; the server
+      // decodes it, so names with CJK, accents, or emoji survive the trip.
+      "X-Filename": encodeURIComponent(file.name || "input.mp4"),
     },
     body: file,
   });
@@ -320,6 +328,11 @@ btnGenerate.addEventListener("click", async () => {
   const key = saveKey();
   if (!key) {
     status("Add your OpenRouter key above first (or use the placeholder).");
+    keyInput.focus();
+    return;
+  }
+  if (!/^[\x20-\x7e]+$/.test(key)) {
+    status("⚠️ That OpenRouter key has characters it cannot send — retype it.");
     keyInput.focus();
     return;
   }

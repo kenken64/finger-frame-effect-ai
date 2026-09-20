@@ -5,6 +5,7 @@ import json
 import os
 import re
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
 
 import requests
 
@@ -26,7 +27,9 @@ class AppHandler(SimpleHTTPRequestHandler):
             self.send_error(413, "Upload must be between 1 byte and 16 MB")
             return
 
-        filename = os.path.basename(self.headers.get("X-Filename", "input.mp4"))
+        # The browser percent-encodes the name: header values are Latin-1 only.
+        raw_name = unquote(self.headers.get("X-Filename", "") or "")
+        filename = os.path.basename(raw_name).strip() or "input.mp4"
         mime = self.headers.get("Content-Type", "video/mp4").split(";", 1)[0]
         data = self.rfile.read(length)
         try:
